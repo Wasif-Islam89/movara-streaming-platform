@@ -50,36 +50,6 @@ All other commercial movies and TV episodes accurately display **Stream Unavaila
 - **Data & Media:** TMDB API v3 (Native Fetch API), HTML5 Video
 - **Persistence:** Browser LocalStorage
 
----
-
-## 🔑 Environment Setup & Running Locally
-
-1. Clone the repository and install dependencies:
-   ```bash
-   npm install
-   ```
-2. Copy `.env.example` to `.env` and add your **TMDB v3 API Key**:
-   ```env
-   VITE_TMDB_API_KEY=your_tmdb_v3_api_key
-   VITE_TMDB_BASE_URL=https://api.themoviedb.org/3
-   ```
-   *(Never commit your `.env` file.)*
-3. Start the development server or build for production:
-   ```bash
-   npm run dev
-   npm run build
-   ```
-
----
-
-## 👨‍💻 Developer
-
-**Wasif Islam**
-
-- GitHub: [@Wasif-Islam89](https://github.com/Wasif-Islam89)
-- Repository: [movara-streaming-platform](https://github.com/Wasif-Islam89/movara-streaming-platform)
-
----
 
 ## ⚠️ Disclaimer
 
