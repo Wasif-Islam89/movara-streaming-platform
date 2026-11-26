@@ -27,7 +27,6 @@ import {
   getStoredPlayerSettings,
   setStoredPlayerSettings,
 } from '../utils/localStorage';
-import { useProfile } from '../context/ProfileContext';
 
 function episodeStillOrBackdrop(episode, show) {
   if (episode?.still_path) {
@@ -41,7 +40,6 @@ export default function WatchTVEpisode() {
   const navigate = useNavigate();
   const { getProgress, saveProgress, markCompleted } = useWatchProgress();
   const { addToHistory } = useWatchHistory();
-  const { activeProfileId } = useProfile();
 
   const parsedSeason = Number(seasonNumber);
   const parsedEpisode = Number(episodeNumber);
@@ -59,13 +57,9 @@ export default function WatchTVEpisode() {
   const [error, setError] = useState(null);
   const [resumeTime, setResumeTime] = useState(0);
   const [autoNextEnabled, setAutoNextEnabled] = useState(
-    () => getStoredPlayerSettings(activeProfileId).autoNextEpisode
+    () => getStoredPlayerSettings().autoNextEpisode
   );
   const hasAutoNavigatedRef = useRef(false);
-
-  useEffect(() => {
-    setAutoNextEnabled(getStoredPlayerSettings(activeProfileId).autoNextEpisode);
-  }, [activeProfileId]);
 
   const loadEpisodeData = useCallback(
     async (signal) => {
@@ -263,13 +257,10 @@ export default function WatchTVEpisode() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progressId]);
 
-  const handleAutoNextChange = useCallback(
-    (nextValue) => {
-      setAutoNextEnabled(nextValue);
-      setStoredPlayerSettings({ autoNextEpisode: nextValue }, activeProfileId);
-    },
-    [activeProfileId]
-  );
+  const handleAutoNextChange = useCallback((nextValue) => {
+    setAutoNextEnabled(nextValue);
+    setStoredPlayerSettings({ autoNextEpisode: nextValue });
+  }, []);
 
   const recordEpisodeHistory = useCallback(
     (currentTime, duration, isCompleted = false) => {

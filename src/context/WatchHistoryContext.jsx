@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getStoredWatchHistory, setStoredWatchHistory } from '../utils/localStorage';
-import { useProfile } from './ProfileContext';
 
 const EVENT_NAME = 'movora:watch-history-update';
 const COMPLETION_THRESHOLD = 90;
@@ -18,8 +17,8 @@ export function getHistoryId(mediaType, id, seasonNumber = null, episodeNumber =
   return `movie-${String(id)}`;
 }
 
-function readStoredHistory(profileId) {
-  const raw = getStoredWatchHistory(profileId);
+function readStoredHistory() {
+  const raw = getStoredWatchHistory();
   if (!Array.isArray(raw)) return [];
 
   return raw
@@ -34,22 +33,19 @@ function readStoredHistory(profileId) {
     .sort((a, b) => (b.lastWatchedAt || 0) - (a.lastWatchedAt || 0));
 }
 
-function persistHistoryList(items, profileId) {
-  setStoredWatchHistory(items, profileId);
+function persistHistoryList(items) {
+  setStoredWatchHistory(items);
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { items, profileId } }));
+    window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: items }));
   }
 }
 
 export function WatchHistoryProvider({ children }) {
-  const { activeProfileId } = useProfile();
-  const [history, setHistory] = useState(() => readStoredHistory(activeProfileId));
+  const [history, setHistory] = useState(readStoredHistory);
 
   useEffect(() => {
-    setHistory(readStoredHistory(activeProfileId));
-
     function handleSync() {
-      setHistory(readStoredHistory(activeProfileId));
+      setHistory(readStoredHistory());
     }
     window.addEventListener(EVENT_NAME, handleSync);
     window.addEventListener('storage', handleSync);
@@ -57,7 +53,7 @@ export function WatchHistoryProvider({ children }) {
       window.removeEventListener(EVENT_NAME, handleSync);
       window.removeEventListener('storage', handleSync);
     };
-  }, [activeProfileId]);
+  }, []);
 
   const addToHistory = useCallback((item) => {
     if (!item || !item.historyId) return;
@@ -112,31 +108,28 @@ export function WatchHistoryProvider({ children }) {
       const next = [record, ...others].sort(
         (a, b) => (b.lastWatchedAt || 0) - (a.lastWatchedAt || 0)
       );
-      persistHistoryList(next, activeProfileId);
+      persistHistoryList(next);
       return next;
     });
-  }, [activeProfileId]);
+  }, []);
 
-  const removeFromHistory = useCallback(
-    (historyId) => {
-      if (!historyId) return;
-      setHistory((prev) => {
-        const next = prev.filter((item) => item.historyId !== historyId);
-        persistHistoryList(next, activeProfileId);
-        return next;
-      });
-    },
-    [activeProfileId]
-  );
+  const removeFromHistory = useCallback((historyId) => {
+    if (!historyId) return;
+    setHistory((prev) => {
+      const next = prev.filter((item) => item.historyId !== historyId);
+      persistHistoryList(next);
+      return next;
+    });
+  }, []);
 
   const clearHistory = useCallback(() => {
     setHistory([]);
-    persistHistoryList([], activeProfileId);
-  }, [activeProfileId]);
+    persistHistoryList([]);
+  }, []);
 
   const getHistory = useCallback(() => {
-    return readStoredHistory(activeProfileId);
-  }, [activeProfileId]);
+    return readStoredHistory();
+  }, []);
 
   const getFilteredHistory = useCallback(
     (filter = 'all') => {

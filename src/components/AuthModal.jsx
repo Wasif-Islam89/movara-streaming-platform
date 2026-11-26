@@ -129,13 +129,18 @@ export default function AuthModal({
     // Realistic simulated authentication delay for professional feel
     setTimeout(() => {
       setIsLoading(false);
-      if (mode === 'signup') {
-        signup({ email: cleanEmail, name: name.trim(), password: cleanPassword });
-      } else {
-        login({ email: cleanEmail, name: name.trim() || undefined });
+      const res =
+        mode === 'signup'
+          ? signup({ email: cleanEmail, name: name.trim(), password: cleanPassword })
+          : login({ email: cleanEmail, name: name.trim() || undefined, password: cleanPassword });
+
+      if (res && res.ok === false) {
+        setError(res.error || 'Authentication failed.');
+        return;
       }
+
       onClose();
-      navigate('/');
+      navigate('/home');
     }, 600);
   }
 

@@ -100,11 +100,6 @@ export default function SearchDropdown({ query, isOpen, onClose }) {
     onClose();
   }
 
-  function handleViewAll() {
-    navigate(`/search?q=${encodeURIComponent(query.trim())}`);
-    onClose();
-  }
-
   return (
     <div
       ref={containerRef}
@@ -126,7 +121,7 @@ export default function SearchDropdown({ query, isOpen, onClose }) {
           <span>Searching MOVORA...</span>
         </div>
       ) : results.length > 0 ? (
-        <div className="divide-y divide-[#2A2926]/50 max-h-[60vh] overflow-y-auto">
+        <div className="divide-y divide-[#2A2926]/50 max-h-[60vh] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {results.map((item, index) => {
             const isSelected = index === selectedIndex;
             return (
@@ -213,18 +208,6 @@ export default function SearchDropdown({ query, isOpen, onClose }) {
           </p>
         </div>
       )}
-
-      {/* Footer / View Full Results Button */}
-      <div className="p-2.5 border-t border-[#2A2926] bg-[#121212]/70 flex items-center justify-end">
-        <button
-          type="button"
-          onClick={handleViewAll}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-[#121212] bg-[#F2B84B] hover:bg-[#E58B43] transition-colors cursor-pointer"
-        >
-          <span>View all results for &ldquo;{query}&rdquo;</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
     </div>
   );
 }

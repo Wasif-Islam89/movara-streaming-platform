@@ -11,21 +11,18 @@ import {
   Search, 
   Bell, 
   ChevronDown, 
-  Pencil, 
   LogOut,
   History,
-  Users
+  Settings
 } from 'lucide-react';
 import movoraLogo from '../assets/logo/MOVORA Logo.png';
 import SearchDropdown from './SearchDropdown';
 import Notification, { getStoredUnreadCount } from './Notification';
-import { useProfile } from '../context/ProfileContext';
 import { useAuth } from '../context/AuthContext';
-import ProfileAvatar from './ProfileAvatar';
 
 // Navigation links ki list
 const NAV_ITEMS = [
-  { name: 'Home', path: '/', icon: Home, end: true },
+  { name: 'Home', path: '/home', icon: Home, end: true },
   { name: 'Movies', path: '/movies', icon: Film },
   { name: 'TV Shows', path: '/tv-shows', icon: Tv },
   { name: 'Kids', path: '/kids', icon: Baby },
@@ -53,9 +50,9 @@ export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Netflix Profile System context
-  const { profiles, activeProfile, switchProfile, openManageProfiles } = useProfile();
-  const { isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
+  const displayName = user?.name || user?.email?.split('@')[0] || 'Account';
+  const avatarInitial = displayName.charAt(0).toUpperCase();
 
   // Menu toggle karne ka function
   function toggleMobileMenu() {
@@ -125,14 +122,9 @@ export default function Navbar() {
     setSearchQuery('');
   }
 
-  // Search query submit karne ka function
+  // Search form submit: keep live dropdown open without navigating to a separate search page
   function handleSearchSubmit(e) {
     e.preventDefault();
-    const trimmed = searchQuery.trim();
-    if (!trimmed) return;
-
-    navigate(`/search?q=${encodeURIComponent(trimmed)}`);
-    closeSearch();
   }
 
   // 1. Page change hone par mobile menu, search, notifications, aur profile automatically band ho jayein
@@ -330,7 +322,7 @@ export default function Navbar() {
           
           {/* Logo / Brand Name */}
           <Link
-            to="/"
+            to="/home"
             className="flex items-center shrink-0 group transition-transform duration-200 active:scale-95"
             aria-label="MOVORA Home"
           >
@@ -400,23 +392,19 @@ export default function Navbar() {
               />
             </div>
 
-            {/* Profile Button & Netflix Dropdown */}
+            {/* Account Button & Dropdown */}
             <div className="relative" ref={profileRef}>
               <button
                 type="button"
                 onClick={toggleProfile}
-                aria-label={`Profile menu: ${activeProfile.name}`}
+                aria-label={`Account menu: ${displayName}`}
                 aria-expanded={isProfileOpen}
                 aria-haspopup="true"
                 className="flex items-center gap-1.5 p-1 rounded-lg hover:bg-[#1D1C1A] transition-colors focus:outline-none focus:ring-2 focus:ring-[#F2B84B]/40 group cursor-pointer"
               >
-                <ProfileAvatar
-                  avatarId={activeProfile.avatar}
-                  name={activeProfile.name}
-                  isKids={activeProfile.isKids}
-                  size="sm"
-                  className="ring-1 ring-[#2A2926] group-hover:ring-[#F2B84B] transition-all"
-                />
+                <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#F2B84B] to-[#E58B43] text-[#121212] font-extrabold text-sm flex items-center justify-center ring-1 ring-[#2A2926] group-hover:ring-[#F2B84B] transition-all">
+                  {avatarInitial}
+                </span>
                 <ChevronDown className={`w-3.5 h-3.5 text-[#AAA49A] group-hover:text-[#F3EEE4] transition-transform duration-200 hidden sm:block ${
                   isProfileOpen ? 'rotate-180' : ''
                 }`} />
@@ -425,72 +413,33 @@ export default function Navbar() {
               {isProfileOpen && (
                 <div
                   role="menu"
-                  aria-label="Profile options"
+                  aria-label="Account options"
                   className="fixed right-4 top-16 mt-2 w-64 max-w-[calc(100vw-2rem)] sm:absolute sm:right-0 sm:top-auto rounded-2xl bg-[#1D1C1A] border border-[#2A2926] shadow-2xl p-2.5 z-50 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl"
                 >
-                  {/* Current Active Profile Card */}
+                  {/* Authenticated Account Card */}
                   <div className="flex items-center gap-3 px-3 py-2.5 border-b border-[#2A2926]/70 mb-1.5 bg-[#121212]/50 rounded-xl">
-                    <ProfileAvatar
-                      avatarId={activeProfile.avatar}
-                      name={activeProfile.name}
-                      isKids={activeProfile.isKids}
-                      size="sm"
-                    />
+                    <span className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#F2B84B] to-[#E58B43] text-[#121212] font-extrabold text-sm flex items-center justify-center shrink-0">
+                      {avatarInitial}
+                    </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-[#F3EEE4] truncate">
-                        {activeProfile.name}
+                        {displayName}
                       </p>
-                      <p className="text-[11px] text-[#F2B84B]">
-                        {activeProfile.isKids ? 'Kids Profile' : 'Active Profile'}
+                      <p className="text-[11px] text-[#AAA49A] truncate">
+                        {user?.email || 'MOVORA Member'}
                       </p>
                     </div>
                   </div>
 
-                  {/* Switch to Other Profiles */}
-                  {profiles.filter((p) => p.id !== activeProfile.id).length > 0 && (
-                    <div className="py-1 space-y-0.5 border-b border-[#2A2926]/70 mb-1.5">
-                      <span className="px-3 py-1 text-[10px] font-semibold text-[#AAA49A] uppercase tracking-wider block">
-                        Switch Profile
-                      </span>
-                      {profiles
-                        .filter((p) => p.id !== activeProfile.id)
-                        .map((otherProfile) => (
-                          <button
-                            key={otherProfile.id}
-                            type="button"
-                            onClick={() => {
-                              switchProfile(otherProfile.id);
-                              closeProfile();
-                            }}
-                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left text-sm text-[#AAA49A] hover:text-[#F3EEE4] hover:bg-[#121212] transition-colors cursor-pointer group"
-                          >
-                            <ProfileAvatar
-                              avatarId={otherProfile.avatar}
-                              name={otherProfile.name}
-                              isKids={otherProfile.isKids}
-                              size="xs"
-                              className="group-hover:scale-105"
-                            />
-                            <span className="truncate">{otherProfile.name}</span>
-                            {otherProfile.isKids && (
-                              <span className="ml-auto text-[9px] font-bold text-[#F2B84B] px-1.5 py-0.5 rounded bg-[#F2B84B]/10">
-                                KIDS
-                              </span>
-                            )}
-                          </button>
-                        ))}
-                    </div>
-                  )}
-
-                  {/* Management & Navigation Actions */}
+                  {/* Account & Navigation Actions */}
                   <div className="py-0.5 space-y-0.5">
                     <Link
-                      to="/profiles"
+                      to="/account"
                       onClick={closeProfile}
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm text-[#AAA49A] hover:text-[#F3EEE4] hover:bg-[#121212] transition-colors cursor-pointer"
                     >
-                      <Users className="w-4 h-4 text-[#F2B84B]" />
-                      <span>Switch Profile</span>
+                      <Settings className="w-4 h-4 text-[#F2B84B]" />
+                      <span>Account Settings</span>
                     </Link>
 
                     <Link
@@ -502,25 +451,13 @@ export default function Navbar() {
                       <span>Watch History</span>
                     </Link>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        closeProfile();
-                        openManageProfiles(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm text-[#AAA49A] hover:text-[#F3EEE4] hover:bg-[#121212] transition-colors cursor-pointer"
-                    >
-                      <Pencil className="w-4 h-4 text-[#F2B84B]" />
-                      <span>Manage Profiles</span>
-                    </button>
-
                     {isAuthenticated ? (
                       <button
                         type="button"
                         onClick={() => {
                           closeProfile();
                           logout();
-                          navigate('/landing');
+                          navigate('/', { replace: true });
                         }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm text-[#AAA49A] hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
                       >
@@ -532,7 +469,7 @@ export default function Navbar() {
                         type="button"
                         onClick={() => {
                           closeProfile();
-                          navigate('/landing');
+                          navigate('/login');
                         }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm text-[#F2B84B] hover:bg-[#121212] transition-colors cursor-pointer font-semibold"
                       >

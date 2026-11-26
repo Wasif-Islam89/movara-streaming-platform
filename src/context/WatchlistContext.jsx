@@ -4,7 +4,6 @@ import {
   setStoredWatchlist as saveStoredWatchlist,
   addStoredNotification,
 } from '../utils/localStorage';
-import { useProfile } from './ProfileContext';
 
 const EVENT_NAME = 'movora:watchlist-update';
 
@@ -16,27 +15,24 @@ export function getWatchlistKey(id, mediaType = 'movie') {
   return `${cleanType}-${String(id)}`;
 }
 
-function getStoredWatchlist(profileId) {
-  const items = fetchStoredWatchlist(profileId);
+function getStoredWatchlist() {
+  const items = fetchStoredWatchlist();
   return items.filter((item) => item && item.id !== undefined && item.id !== null);
 }
 
-function persistWatchlist(items, profileId) {
-  saveStoredWatchlist(items, profileId);
+function persistWatchlist(items) {
+  saveStoredWatchlist(items);
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { items, profileId } }));
+    window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: items }));
   }
 }
 
 export function WatchlistProvider({ children }) {
-  const { activeProfileId } = useProfile();
-  const [watchlist, setWatchlist] = useState(() => getStoredWatchlist(activeProfileId));
+  const [watchlist, setWatchlist] = useState(getStoredWatchlist);
 
   useEffect(() => {
-    setWatchlist(getStoredWatchlist(activeProfileId));
-
     function handleUpdate() {
-      setWatchlist(getStoredWatchlist(activeProfileId));
+      setWatchlist(getStoredWatchlist());
     }
 
     window.addEventListener(EVENT_NAME, handleUpdate);
@@ -46,7 +42,7 @@ export function WatchlistProvider({ children }) {
       window.removeEventListener(EVENT_NAME, handleUpdate);
       window.removeEventListener('storage', handleUpdate);
     };
-  }, [activeProfileId]);
+  }, []);
 
   const isInWatchlist = useCallback(
     (id, mediaType = 'movie') => {
@@ -77,7 +73,7 @@ export function WatchlistProvider({ children }) {
       };
 
       const nextList = [sanitizedItem, ...prev];
-      persistWatchlist(nextList, activeProfileId);
+      persistWatchlist(nextList);
 
       // Trigger automatic streaming notification
       addStoredNotification({
@@ -90,7 +86,7 @@ export function WatchlistProvider({ children }) {
 
       return nextList;
     });
-  }, [activeProfileId]);
+  }, []);
 
   const removeFromWatchlist = useCallback((id, mediaType = 'movie') => {
     if (id === undefined || id === null) return;
@@ -100,10 +96,10 @@ export function WatchlistProvider({ children }) {
       const nextList = prev.filter(
         (item) => getWatchlistKey(item.id, item.mediaType) !== targetKey
       );
-      persistWatchlist(nextList, activeProfileId);
+      persistWatchlist(nextList);
       return nextList;
     });
-  }, [activeProfileId]);
+  }, []);
 
   const toggleWatchlist = useCallback(
     (item) => {
@@ -121,8 +117,8 @@ export function WatchlistProvider({ children }) {
 
   const clearWatchlist = useCallback(() => {
     setWatchlist([]);
-    persistWatchlist([], activeProfileId);
-  }, [activeProfileId]);
+    persistWatchlist([]);
+  }, []);
 
   const value = {
     watchlist,

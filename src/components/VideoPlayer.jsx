@@ -21,7 +21,6 @@ import {
   getStoredPlayerSettings,
   setStoredPlayerSettings,
 } from '../utils/localStorage';
-import { useProfile } from '../context/ProfileContext';
 
 const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const NEXT_EPISODE_COUNTDOWN_SECONDS = 10;
@@ -120,8 +119,6 @@ export default function VideoPlayer({
   backTo = null,
   backLabel = 'Back',
 }) {
-  const { activeProfileId } = useProfile();
-
   const containerRef = useRef(null);
   const videoRef = useRef(null);
   const settingsRef = useRef(null);
@@ -151,7 +148,7 @@ export default function VideoPlayer({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(
-    () => getStoredPlayerSettings(activeProfileId).defaultPlaybackSpeed
+    () => getStoredPlayerSettings().defaultPlaybackSpeed
   );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -184,21 +181,11 @@ export default function VideoPlayer({
   });
   const [activeCueText, setActiveCueText] = useState('');
   const [subtitlePrefs, setSubtitlePrefs] = useState(
-    () => getStoredPlayerSettings(activeProfileId).subtitlePreferences
+    () => getStoredPlayerSettings().subtitlePreferences
   );
   const [audioTracks, setAudioTracks] = useState([]);
   const [activeAudioTrackIdx, setActiveAudioTrackIdx] = useState(0);
   const pendingSeekAfterSwitchRef = useRef(null);
-
-  // Sync player settings when active profile changes
-  useEffect(() => {
-    const settings = getStoredPlayerSettings(activeProfileId);
-    setPlaybackRate(settings.defaultPlaybackSpeed);
-    setSubtitlePrefs(settings.subtitlePreferences);
-    if (videoRef.current) {
-      videoRef.current.playbackRate = settings.defaultPlaybackSpeed;
-    }
-  }, [activeProfileId]);
 
   const clearBufferingTimers = useCallback(() => {
     if (bufferingTimerRef.current) {
@@ -523,7 +510,7 @@ export default function VideoPlayer({
       video.playbackRate = speed;
     }
     setPlaybackRate(speed);
-    setStoredPlayerSettings({ defaultPlaybackSpeed: speed }, activeProfileId);
+    setStoredPlayerSettings({ defaultPlaybackSpeed: speed });
   };
 
   const handleSubtitleChange = (lang) => {
@@ -533,7 +520,7 @@ export default function VideoPlayer({
   const handleSubtitlePrefsChange = (updates) => {
     setSubtitlePrefs((prev) => {
       const next = { ...prev, ...updates };
-      setStoredPlayerSettings({ subtitlePreferences: next }, activeProfileId);
+      setStoredPlayerSettings({ subtitlePreferences: next });
       return next;
     });
   };

@@ -22,7 +22,7 @@ const CATEGORY_LINKS = [
 
 // Quick Access features and utility destinations
 const QUICK_LINKS = [
-  { name: 'Search Catalog', path: '/search' },
+  { name: 'Watch History', path: '/watch-history' },
   { name: 'Saved Watchlist', path: '/my-list' },
   { name: 'Featured Releases', path: '/movies' },
   { name: 'Discovery Filter', path: '/discover' },

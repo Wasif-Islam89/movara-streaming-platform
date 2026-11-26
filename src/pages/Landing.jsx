@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   ChevronRight, 
   ChevronLeft, 
@@ -154,6 +155,8 @@ const FAQ_ITEMS = [
 ];
 
 export default function Landing({ initialAuthOpen = false, initialAuthMode = 'signin' }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(initialAuthOpen);
   const [authMode, setAuthMode] = useState(initialAuthMode);
   const [emailInput, setEmailInput] = useState('');
@@ -161,6 +164,18 @@ export default function Landing({ initialAuthOpen = false, initialAuthMode = 'si
   const [activeFaq, setActiveFaq] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const scrollContainerRef = useRef(null);
+
+  useEffect(() => {
+    setIsAuthModalOpen(initialAuthOpen);
+    setAuthMode(initialAuthMode || 'signin');
+  }, [initialAuthOpen, initialAuthMode]);
+
+  function handleCloseAuthModal() {
+    setIsAuthModalOpen(false);
+    if (location.pathname === '/login' || location.pathname === '/signup') {
+      navigate('/', { replace: true });
+    }
+  }
 
   function handleGetStarted(e, emailVal) {
     e.preventDefault();
@@ -512,7 +527,7 @@ export default function Landing({ initialAuthOpen = false, initialAuthMode = 'si
       {/* Sign In & Sign Up Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
+        onClose={handleCloseAuthModal}
         initialMode={authMode}
         initialEmail={emailInput || bottomEmailInput}
       />
