@@ -160,9 +160,7 @@ export default function Landing({ initialAuthOpen = false, initialAuthMode = 'si
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(initialAuthOpen);
   const [authMode, setAuthMode] = useState(initialAuthMode);
   const [emailInput, setEmailInput] = useState('');
-  const [bottomEmailInput, setBottomEmailInput] = useState('');
   const [activeFaq, setActiveFaq] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState('All');
   const scrollContainerRef = useRef(null);
 
   useEffect(() => {
@@ -303,7 +301,7 @@ export default function Landing({ initialAuthOpen = false, initialAuthMode = 'si
         </div>
       </div>
 
-      {/* 2. SECTION: TRENDING ON MOVORA (TOP 10 NUMBERED CARDS) */}
+      {/* 2. SECTION: TRENDING ON MOVORA (TOP 5 NUMBERED CARDS) */}
       <section className="relative z-20 max-w-7xl mx-auto px-4 sm:px-8 py-10 sm:py-16">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
           <div>
@@ -311,54 +309,36 @@ export default function Landing({ initialAuthOpen = false, initialAuthMode = 'si
               Trending on MOVORA
             </h2>
             <p className="text-xs sm:text-sm text-[#AAA49A] mt-0.5">
-              Top 10 highest-rated movies and series streaming this week
+              Top 5 highest-rated movies and series streaming this week
             </p>
           </div>
 
-          {/* Category Filter Pills */}
-          <div className="flex items-center gap-2">
-            {['All', 'Movies', 'TV Shows'].map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                  selectedCategory === cat
-                    ? 'bg-[#F2B84B] text-[#121212] font-bold shadow-md shadow-[#F2B84B]/20'
-                    : 'bg-[#1D1C1A] text-[#AAA49A] hover:text-[#F3EEE4] border border-[#2E2D2A]'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-
-            <div className="hidden sm:flex items-center gap-1.5 ml-2">
-              <button
-                type="button"
-                onClick={() => handleScroll('left')}
-                className="p-2 rounded-full bg-[#1D1C1A] border border-[#2E2D2A] text-[#AAA49A] hover:text-[#F3EEE4] hover:border-[#F2B84B]/50 transition-colors cursor-pointer"
-                aria-label="Scroll left"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleScroll('right')}
-                className="p-2 rounded-full bg-[#1D1C1A] border border-[#2E2D2A] text-[#AAA49A] hover:text-[#F3EEE4] hover:border-[#F2B84B]/50 transition-colors cursor-pointer"
-                aria-label="Scroll right"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+          <div className="hidden sm:flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => handleScroll('left')}
+              className="p-2 rounded-full bg-[#1D1C1A] border border-[#2E2D2A] text-[#AAA49A] hover:text-[#F3EEE4] hover:border-[#F2B84B]/50 transition-colors cursor-pointer"
+              aria-label="Scroll left"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleScroll('right')}
+              className="p-2 rounded-full bg-[#1D1C1A] border border-[#2E2D2A] text-[#AAA49A] hover:text-[#F3EEE4] hover:border-[#F2B84B]/50 transition-colors cursor-pointer"
+              aria-label="Scroll right"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
-        {/* Horizontal Numbered Top 10 Row */}
+        {/* Horizontal Numbered Top 5 Row */}
         <div 
           ref={scrollContainerRef}
           className="flex items-center gap-4 sm:gap-6 overflow-x-auto pb-6 pt-2 scrollbar-none scroll-smooth snap-x"
         >
-          {TRENDING_TOP_10.map((movie) => (
+          {TRENDING_TOP_10.slice(0, 5).map((movie) => (
             <div
               key={movie.id}
               onClick={() => setIsAuthModalOpen(true)}
@@ -486,39 +466,6 @@ export default function Landing({ initialAuthOpen = false, initialAuthMode = 'si
             );
           })}
         </div>
-
-        {/* Secondary Bottom Email CTA */}
-        <div className="mt-14 sm:mt-18 text-center p-8 sm:p-10 rounded-3xl bg-[#1D1C1A]/80 border border-[#2E2D2A] backdrop-blur-md">
-          <h3 className="text-xl sm:text-2xl font-bold text-[#F3EEE4] mb-2">
-            Ready to experience extraordinary cinema?
-          </h3>
-          <p className="text-xs sm:text-sm text-[#AAA49A] max-w-lg mx-auto mb-6">
-            Enter your email to unlock instant streaming and discover hand-curated cinematic marvels.
-          </p>
-
-          <form 
-            onSubmit={(e) => handleGetStarted(e, bottomEmailInput)}
-            className="w-full max-w-xl mx-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-2"
-          >
-            <div className="relative flex-1">
-              <input
-                type="email"
-                required
-                value={bottomEmailInput}
-                onChange={(e) => setBottomEmailInput(e.target.value)}
-                placeholder="Enter your email address"
-                className="w-full px-5 py-3.5 rounded-xl sm:rounded-l-xl sm:rounded-r-none bg-[#121212] border border-[#3E3C38] text-[#F3EEE4] placeholder-[#AAA49A] text-sm sm:text-base focus:outline-none focus:border-[#F2B84B] focus:ring-1 focus:ring-[#F2B84B] transition-all"
-              />
-            </div>
-            <button
-              type="submit"
-              className="flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 rounded-xl sm:rounded-r-xl sm:rounded-l-none font-bold text-sm sm:text-base text-[#121212] bg-[#F2B84B] hover:bg-[#E58B43] shadow-lg shadow-[#F2B84B]/20 transition-colors cursor-pointer whitespace-nowrap group shrink-0"
-            >
-              <span>Start Watching</span>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
-          </form>
-        </div>
       </section>
 
       {/* 5. ORIGINAL MOVORA FOOTER (Same as main pages) */}
@@ -529,7 +476,7 @@ export default function Landing({ initialAuthOpen = false, initialAuthMode = 'si
         isOpen={isAuthModalOpen}
         onClose={handleCloseAuthModal}
         initialMode={authMode}
-        initialEmail={emailInput || bottomEmailInput}
+        initialEmail={emailInput}
       />
     </div>
   );

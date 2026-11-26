@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
-import { 
-  X, 
-  Lock, 
-  Mail, 
-  User, 
-  ArrowRight, 
-  Eye, 
-  EyeOff, 
-  CheckCircle2, 
-  AlertCircle, 
+import {
+  X,
+  Lock,
+  Mail,
+  User,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  AlertCircle,
   Loader2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -27,11 +27,11 @@ import movoraLogo from '../assets/logo/MOVORA Logo.png';
  * - Smooth simulated authentication loading spinner
  * - Responsive, accessible, and aligned with MOVORA's dark cinematic theme
  */
-export default function AuthModal({ 
-  isOpen, 
-  onClose, 
-  initialEmail = '', 
-  initialMode = 'signin' 
+export default function AuthModal({
+  isOpen,
+  onClose,
+  initialEmail = '',
+  initialMode = 'signin'
 }) {
   const { login, signup } = useAuth();
   const navigate = useNavigate();
@@ -157,20 +157,20 @@ export default function AuthModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xl animate-fadeIn">
       {/* Backdrop click dismiss */}
-      <div 
-        className="fixed inset-0" 
-        onClick={onClose} 
-        aria-hidden="true" 
+      <div
+        className="fixed inset-0"
+        onClick={onClose}
+        aria-hidden="true"
       />
 
       <div className="relative w-full max-w-md max-h-[94vh] overflow-y-auto overflow-x-hidden no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden bg-[#1D1C1A] border border-[#2E2D2A] rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-6 sm:p-8 z-10 text-[#F3EEE4]">
-        
+
         {/* Subtle Ambient Gold Glow Effect (Safely contained to prevent overflow) */}
         <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
           <div className="absolute -top-16 -right-16 w-44 h-44 bg-[#F2B84B]/10 rounded-full blur-3xl" />
           <div className="absolute -bottom-16 -left-16 w-44 h-44 bg-[#E58B43]/10 rounded-full blur-3xl" />
         </div>
-        
+
         {/* Top Gold Gradient Accent Line */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#F2B84B] via-[#E58B43] to-[#F2B84B]" />
 
@@ -187,15 +187,15 @@ export default function AuthModal({
         {/* Brand Logo & Header */}
         <div className="flex flex-col items-center text-center mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <img 
-              src={movoraLogo} 
-              alt="MOVORA" 
-              className="h-9 w-auto object-contain drop-shadow-[0_2px_12px_rgba(242,184,75,0.3)]" 
+            <img
+              src={movoraLogo}
+              alt="MOVORA"
+              className="h-9 w-auto object-contain drop-shadow-[0_2px_12px_rgba(242,184,75,0.3)]"
             />
           </div>
 
           <h2 className="text-2xl sm:text-3xl font-extrabold text-[#F3EEE4] tracking-tight">
-            {mode === 'signup' ? 'Create Membership' : 'Welcome Back'}
+            {mode === 'signup' ? 'Create Account' : 'Welcome Back'}
           </h2>
           <p className="text-xs sm:text-sm text-[#AAA49A] mt-1.5 max-w-xs">
             {mode === 'signup'
@@ -213,11 +213,10 @@ export default function AuthModal({
               setError('');
               setForgotPasswordSent(false);
             }}
-            className={`py-2 text-xs sm:text-sm font-semibold rounded-xl transition-all duration-200 cursor-pointer ${
-              mode === 'signin'
-                ? 'bg-gradient-to-r from-[#F2B84B] to-[#E58B43] text-[#121212] shadow-md shadow-[#F2B84B]/20 font-bold'
-                : 'text-[#AAA49A] hover:text-[#F3EEE4]'
-            }`}
+            className={`py-2 text-xs sm:text-sm font-semibold rounded-xl transition-all duration-200 cursor-pointer ${mode === 'signin'
+              ? 'bg-gradient-to-r from-[#F2B84B] to-[#E58B43] text-[#121212] shadow-md shadow-[#F2B84B]/20 font-bold'
+              : 'text-[#AAA49A] hover:text-[#F3EEE4]'
+              }`}
           >
             Sign In
           </button>
@@ -228,11 +227,10 @@ export default function AuthModal({
               setError('');
               setForgotPasswordSent(false);
             }}
-            className={`py-2 text-xs sm:text-sm font-semibold rounded-xl transition-all duration-200 cursor-pointer ${
-              mode === 'signup'
-                ? 'bg-gradient-to-r from-[#F2B84B] to-[#E58B43] text-[#121212] shadow-md shadow-[#F2B84B]/20 font-bold'
-                : 'text-[#AAA49A] hover:text-[#F3EEE4]'
-            }`}
+            className={`py-2 text-xs sm:text-sm font-semibold rounded-xl transition-all duration-200 cursor-pointer ${mode === 'signup'
+              ? 'bg-gradient-to-r from-[#F2B84B] to-[#E58B43] text-[#121212] shadow-md shadow-[#F2B84B]/20 font-bold'
+              : 'text-[#AAA49A] hover:text-[#F3EEE4]'
+              }`}
           >
             Create Account
           </button>
@@ -258,7 +256,7 @@ export default function AuthModal({
 
         {/* Main Authentication Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          
+
           {/* Full Name (Sign Up only) */}
           {mode === 'signup' && (
             <div>
@@ -275,7 +273,7 @@ export default function AuthModal({
                     setName(e.target.value);
                     setError('');
                   }}
-                  placeholder="e.g. Wasif Khan"
+                  placeholder="Username"
                   className="w-full pl-10 pr-4 py-2.5 sm:py-3 rounded-xl bg-[#121212] border border-[#2E2D2A] text-[#F3EEE4] placeholder-[#AAA49A]/50 text-sm focus:outline-none focus:border-[#F2B84B] focus:ring-1 focus:ring-[#F2B84B] transition-colors"
                 />
               </div>
@@ -407,7 +405,7 @@ export default function AuthModal({
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="w-4 h-4 rounded border-[#2E2D2A] bg-[#121212] text-[#F2B84B] accent-[#F2B84B] focus:ring-0 cursor-pointer"
                 />
-                <span>Remember me for 30 days</span>
+                <span>Remember me </span>
               </label>
             </div>
           ) : (
@@ -438,7 +436,7 @@ export default function AuthModal({
               </>
             ) : (
               <>
-                <span>{mode === 'signup' ? 'Start 30-Day Free Trial' : 'Sign In to MOVORA'}</span>
+                <span>{mode === 'signup' ? 'Sign Up to MOVORA' : 'Sign In to MOVORA'}</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
