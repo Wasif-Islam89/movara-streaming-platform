@@ -2,6 +2,7 @@ import POSTERS from '../assets/posters/index.jsx';
 import duneBackdrop from '../assets/backgrounds/hero-backdrop.jpg';
 import cyberpunkBackdrop from '../assets/backgrounds/hero-cyberpunk.jpg';
 import fantasyBackdrop from '../assets/backgrounds/hero-fantasy.jpg';
+import { tmdbApi, getTmdbImageUrl, isApiConfigured } from './api';
 
 /**
  * Consolidated MOVORA Real Movies Catalog
@@ -913,4 +914,205 @@ export function getKidsSciFi() {
 export function getKidsFamily() {
   const ids = ['the-lion-king', 'coco', 'inside-out-2', 'ratatouille', 'shrek-2', 'despicable-me-4'];
   return ids.map((id) => getMovieById(id)).filter(Boolean);
+}
+
+/**
+ * Format TMDB runtime in minutes (e.g., 166 -> "2h 46m")
+ * @param {number|null|undefined} minutes
+ * @returns {string}
+ */
+export function formatMovieRuntime(minutes) {
+  if (!minutes || typeof minutes !== 'number' || minutes <= 0) return '';
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hrs === 0) return `${mins}m`;
+  return `${hrs}h ${String(mins).padStart(2, '0')}m`;
+}
+
+/**
+ * Extract primary official YouTube trailer URL from TMDB videos object
+ * @param {Object|null|undefined} videos
+ * @returns {string|null}
+ */
+export function extractYouTubeTrailerUrl(videos) {
+  const list = videos?.results;
+  if (!Array.isArray(list) || list.length === 0) return null;
+
+  const preferred =
+    list.find((v) => v.site === 'YouTube' && v.type === 'Trailer' && v.official) ||
+    list.find((v) => v.site === 'YouTube' && v.type === 'Trailer') ||
+    list.find((v) => v.site === 'YouTube' && v.type === 'Teaser') ||
+    list.find((v) => v.site === 'YouTube');
+
+  return preferred?.key ? `https://www.youtube.com/watch?v=${preferred.key}` : null;
+}
+
+/**
+ * Normalize a raw TMDB movie object into MOVORA's standard movie shape
+ * @param {Object} tmdbMovie
+ * @param {Record<number, string>} [genreMap]
+ * @returns {Object|null}
+ */
+export function normalizeTmdbMovie(tmdbMovie, genreMap = {}) {
+  if (!tmdbMovie || tmdbMovie.id === undefined || tmdbMovie.id === null) return null;
+
+  const genreNames = Array.isArray(tmdbMovie.genres)
+    ? tmdbMovie.genres.map((g) => g.name).filter(Boolean)
+    : Array.isArray(tmdbMovie.genre_ids)
+    ? tmdbMovie.genre_ids.map((gid) => genreMap[gid]).filter(Boolean)
+    : [];
+
+  return {
+    id: tmdbMovie.id,
+    title: tmdbMovie.title || tmdbMovie.original_title || 'Untitled',
+    originalTitle: tmdbMovie.original_title || '',
+    tagline: tmdbMovie.tagline || '',
+    year: tmdbMovie.release_date ? String(tmdbMovie.release_date).slice(0, 4) : '',
+    rating: typeof tmdbMovie.vote_average === 'number' && tmdbMovie.vote_average > 0
+      ? Number(tmdbMovie.vote_average.toFixed(1))
+      : null,
+    voteCount: typeof tmdbMovie.vote_count === 'number' ? tmdbMovie.vote_count : null,
+    status: tmdbMovie.status || '',
+    duration: formatMovieRuntime(tmdbMovie.runtime),
+    releaseDate: tmdbMovie.release_date || '',
+    genre: genreNames.join(' • '),
+    language: tmdbMovie.spoken_languages?.[0]?.english_name || tmdbMovie.original_language || 'English',
+    posterUrl: getTmdbImageUrl(tmdbMovie.poster_path, 'w500'),
+    backdropUrl: getTmdbImageUrl(tmdbMovie.backdrop_path, 'w1280'),
+    description: tmdbMovie.overview || '',
+    trailerUrl: extractYouTubeTrailerUrl(tmdbMovie.videos),
+    mediaType: 'movie',
+    poster_path: tmdbMovie.poster_path || null,
+    backdrop_path: tmdbMovie.backdrop_path || null,
+    release_date: tmdbMovie.release_date || '',
+    vote_average: tmdbMovie.vote_average ?? null,
+    credits: tmdbMovie.credits || null,
+    similar: Array.isArray(tmdbMovie.similar?.results)
+      ? tmdbMovie.similar.results
+          .filter((item) => String(item.id) !== String(tmdbMovie.id))
+          .map((item) => normalizeTmdbMovie(item, genreMap))
+          .filter(Boolean)
+      : [],
+  };
+}
+
+let cachedMovieGenreMap = null;
+let cachedMovieGenresList = null;
+
+/**
+ * Fetch and cache TMDB movie genres list for the current session
+ * @param {RequestInit} [options]
+ * @returns {Promise<Array<{ id: number, name: string }>>}
+ */
+export async function fetchMovieGenres(options) {
+  if (cachedMovieGenresList) return cachedMovieGenresList;
+  if (!isApiConfigured()) return [];
+  try {
+    const data = await tmdbApi.getMovieGenres(options);
+    const list = Array.isArray(data.genres) ? data.genres : [];
+    const map = {};
+    for (const g of list) {
+      if (g?.id && g?.name) map[g.id] = g.name;
+    }
+    cachedMovieGenresList = list;
+    cachedMovieGenreMap = map;
+    return list;
+  } catch (err) {
+    if (err?.name === 'AbortError') throw err;
+    return [];
+  }
+}
+
+/**
+ * Fetch and cache TMDB movie genre ID-to-name map for the current session
+ * @param {RequestInit} [options]
+ * @returns {Promise<Record<number, string>>}
+ */
+export async function fetchMovieGenreMap(options) {
+  if (cachedMovieGenreMap) return cachedMovieGenreMap;
+  await fetchMovieGenres(options);
+  return cachedMovieGenreMap || {};
+}
+
+/**
+ * Discover movies with TMDB pagination support
+ * @param {Record<string, any>} [params]
+ * @param {RequestInit} [options]
+ * @param {Record<number, string>} [genreMap]
+ * @returns {Promise<{ results: Array<Object>, page: number, totalPages: number, totalResults: number }>}
+ */
+export async function discoverMoviesPage(params = {}, options, genreMap = {}) {
+  if (!isApiConfigured()) {
+    const local = getAllMovies();
+    return {
+      results: local,
+      page: 1,
+      totalPages: 1,
+      totalResults: local.length,
+    };
+  }
+  const data = await tmdbApi.discoverMovies(params, options);
+  const results = (data.results || [])
+    .map((m) => normalizeTmdbMovie(m, genreMap))
+    .filter(Boolean);
+  return {
+    results,
+    page: data.page || 1,
+    totalPages: data.total_pages || 1,
+    totalResults: data.total_results || results.length,
+  };
+}
+
+/**
+ * Async TMDB-ready Movie Service Helpers (with safe local catalog fallback)
+ */
+export async function fetchTrendingMovies(timeWindow = 'week', page = 1, options, genreMap = {}) {
+  if (!isApiConfigured()) return getAllMovies().slice(0, 7);
+  const data = await tmdbApi.getTrendingMovies(timeWindow, page, options);
+  return (data.results || []).map((m) => normalizeTmdbMovie(m, genreMap)).filter(Boolean);
+}
+
+export async function fetchPopularMovies(page = 1, options, genreMap = {}) {
+  if (!isApiConfigured()) return getAllMovies().slice(0, 7);
+  const data = await tmdbApi.getPopularMovies(page, options);
+  return (data.results || []).map((m) => normalizeTmdbMovie(m, genreMap)).filter(Boolean);
+}
+
+export async function fetchTopRatedMovies(page = 1, options, genreMap = {}) {
+  if (!isApiConfigured()) return getTopRatedMovies();
+  const data = await tmdbApi.getTopRatedMovies(page, options);
+  return (data.results || []).map((m) => normalizeTmdbMovie(m, genreMap)).filter(Boolean);
+}
+
+export async function fetchUpcomingMovies(page = 1, options, genreMap = {}) {
+  if (!isApiConfigured()) return getAllMovies().slice(0, 6);
+  const data = await tmdbApi.getUpcomingMovies(page, options);
+  return (data.results || []).map((m) => normalizeTmdbMovie(m, genreMap)).filter(Boolean);
+}
+
+export async function fetchMovieDetails(movieId, options) {
+  const localMatch = getMovieById(movieId);
+  if (!isApiConfigured() || (localMatch && isNaN(Number(movieId)))) {
+    return localMatch;
+  }
+  const data = await tmdbApi.getMovieDetails(movieId, options);
+  return normalizeTmdbMovie(data);
+}
+
+export async function fetchMovieCredits(movieId, options) {
+  if (!isApiConfigured() || isNaN(Number(movieId))) return { cast: [], crew: [] };
+  return tmdbApi.getMovieCredits(movieId, options);
+}
+
+export async function fetchMovieVideos(movieId, options) {
+  if (!isApiConfigured() || isNaN(Number(movieId))) return { results: [] };
+  return tmdbApi.getMovieVideos(movieId, options);
+}
+
+export async function fetchSimilarMovies(movieId, page = 1, options) {
+  if (!isApiConfigured() || isNaN(Number(movieId))) {
+    return getRelatedMovies(movieId, 6);
+  }
+  const data = await tmdbApi.getSimilarMovies(movieId, page, options);
+  return (data.results || []).map((m) => normalizeTmdbMovie(m)).filter(Boolean);
 }

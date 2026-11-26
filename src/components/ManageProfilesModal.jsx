@@ -32,6 +32,7 @@ export default function ManageProfilesModal() {
   const [formName, setFormName] = useState('');
   const [formAvatar, setFormAvatar] = useState('av-gold');
   const [formIsKids, setFormIsKids] = useState(false);
+  const [formError, setFormError] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   if (!isManageModalOpen) return null;
@@ -49,6 +50,7 @@ export default function ManageProfilesModal() {
     setFormName('');
     setFormAvatar('av-blue');
     setFormIsKids(false);
+    setFormError('');
     setDeleteConfirmId(null);
   }
 
@@ -57,30 +59,44 @@ export default function ManageProfilesModal() {
     setFormName(profile.name);
     setFormAvatar(profile.avatar || 'av-gold');
     setFormIsKids(Boolean(profile.isKids));
+    setFormError('');
     setDeleteConfirmId(null);
   }
 
   function closeSubForm() {
     setEditingTarget(null);
+    setFormError('');
     setDeleteConfirmId(null);
   }
 
   function handleSaveForm(e) {
     e.preventDefault();
-    if (!formName.trim()) return;
+    setFormError('');
+    if (!formName.trim()) {
+      setFormError('Profile name cannot be empty.');
+      return;
+    }
 
     if (editingTarget === 'new') {
-      addProfile({
+      const res = addProfile({
         name: formName.trim(),
         avatar: formAvatar,
         isKids: formIsKids,
       });
+      if (!res?.ok) {
+        setFormError(res?.error || 'Could not create profile.');
+        return;
+      }
     } else if (editingTarget && editingTarget.id) {
-      updateProfile(editingTarget.id, {
+      const res = updateProfile(editingTarget.id, {
         name: formName.trim(),
         avatar: formAvatar,
         isKids: formIsKids,
       });
+      if (!res?.ok) {
+        setFormError(res?.error || 'Could not update profile.');
+        return;
+      }
     }
 
     closeSubForm();
@@ -263,13 +279,21 @@ export default function ManageProfilesModal() {
                   id="profile-name-input"
                   type="text"
                   value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
+                  onChange={(e) => {
+                    setFormName(e.target.value);
+                    if (formError) setFormError('');
+                  }}
                   placeholder="Enter profile name..."
                   maxLength={24}
                   required
                   autoFocus
                   className="w-full px-4 py-3 rounded-xl bg-[#121212] border border-[#2A2926] text-[#F3EEE4] placeholder-[#AAA49A]/60 focus:outline-none focus:border-[#F2B84B] focus:ring-1 focus:ring-[#F2B84B] text-base"
                 />
+                {formError && (
+                  <p className="text-xs text-[#E58B43] font-medium" role="alert">
+                    {formError}
+                  </p>
+                )}
               </div>
             </div>
 

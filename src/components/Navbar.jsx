@@ -12,7 +12,9 @@ import {
   Bell, 
   ChevronDown, 
   Pencil, 
-  LogOut 
+  LogOut,
+  History,
+  Users
 } from 'lucide-react';
 import movoraLogo from '../assets/logo/MOVORA Logo.png';
 import SearchDropdown from './SearchDropdown';
@@ -53,7 +55,7 @@ export default function Navbar() {
 
   // Netflix Profile System context
   const { profiles, activeProfile, switchProfile, openManageProfiles } = useProfile();
-  const { logout } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
 
   // Menu toggle karne ka function
   function toggleMobileMenu() {
@@ -482,6 +484,24 @@ export default function Navbar() {
 
                   {/* Management & Navigation Actions */}
                   <div className="py-0.5 space-y-0.5">
+                    <Link
+                      to="/profiles"
+                      onClick={closeProfile}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm text-[#AAA49A] hover:text-[#F3EEE4] hover:bg-[#121212] transition-colors cursor-pointer"
+                    >
+                      <Users className="w-4 h-4 text-[#F2B84B]" />
+                      <span>Switch Profile</span>
+                    </Link>
+
+                    <Link
+                      to="/watch-history"
+                      onClick={closeProfile}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm text-[#AAA49A] hover:text-[#F3EEE4] hover:bg-[#121212] transition-colors cursor-pointer"
+                    >
+                      <History className="w-4 h-4 text-[#F2B84B]" />
+                      <span>Watch History</span>
+                    </Link>
+
                     <button
                       type="button"
                       onClick={() => {
@@ -494,18 +514,32 @@ export default function Navbar() {
                       <span>Manage Profiles</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        closeProfile();
-                        logout();
-                        navigate('/');
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm text-[#AAA49A] hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      <span>Sign Out</span>
-                    </button>
+                    {isAuthenticated ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          closeProfile();
+                          logout();
+                          navigate('/landing');
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm text-[#AAA49A] hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Sign Out</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          closeProfile();
+                          navigate('/landing');
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-sm text-[#F2B84B] hover:bg-[#121212] transition-colors cursor-pointer font-semibold"
+                      >
+                        <LogOut className="w-4 h-4 rotate-180" />
+                        <span>Sign In</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

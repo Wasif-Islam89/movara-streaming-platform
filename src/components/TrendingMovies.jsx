@@ -75,6 +75,9 @@ const DEFAULT_TRENDING_MOVIES = [
  */
 export default function TrendingMovies({
   movies = DEFAULT_TRENDING_MOVIES,
+  isLoading = false,
+  error = null,
+  onRetry = null,
   className = '',
 }) {
   return (
@@ -82,6 +85,9 @@ export default function TrendingMovies({
       title="Trending Movies"
       badge="Trending"
       movies={movies}
+      isLoading={isLoading}
+      error={error}
+      onRetry={onRetry}
       className={className}
     />
   );

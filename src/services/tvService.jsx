@@ -3,6 +3,8 @@ import heroTvBackdrop from '../assets/backgrounds/hero-tv-shows.jpg';
 import cyberpunkBackdrop from '../assets/backgrounds/hero-cyberpunk.jpg';
 import fantasyBackdrop from '../assets/backgrounds/hero-fantasy.jpg';
 import duneBackdrop from '../assets/backgrounds/hero-backdrop.jpg';
+import { tmdbApi, getTmdbImageUrl, isApiConfigured } from './api';
+import { extractYouTubeTrailerUrl } from './movieService';
 
 /**
  * Consolidated MOVORA Real TV Shows Catalog
@@ -681,4 +683,193 @@ export function getCrimeMysteryTVShows() {
 export function getSciFiWorldsTVShows() {
   const ids = ['the-mandalorian', 'severance', 'vikings', 'attack-on-titan', 'death-note', 'rick-and-morty'];
   return ids.map((id) => getTVShowById(id)).filter(Boolean);
+}
+
+/**
+ * Normalize a raw TMDB TV show object into MOVORA's standard TV show shape
+ * @param {Object} tmdbShow
+ * @param {Record<number, string>} [genreMap]
+ * @returns {Object|null}
+ */
+export function normalizeTmdbTVShow(tmdbShow, genreMap = {}) {
+  if (!tmdbShow || tmdbShow.id === undefined || tmdbShow.id === null) return null;
+
+  const genreNames = Array.isArray(tmdbShow.genres)
+    ? tmdbShow.genres.map((g) => g.name).filter(Boolean)
+    : Array.isArray(tmdbShow.genre_ids)
+    ? tmdbShow.genre_ids.map((gid) => genreMap[gid]).filter(Boolean)
+    : [];
+
+  const numSeasons = tmdbShow.number_of_seasons;
+  const numEpisodes = tmdbShow.number_of_episodes;
+
+  return {
+    id: tmdbShow.id,
+    title: tmdbShow.name || tmdbShow.original_name || 'Untitled',
+    originalTitle: tmdbShow.original_name || '',
+    tagline: tmdbShow.tagline || '',
+    year: tmdbShow.first_air_date ? String(tmdbShow.first_air_date).slice(0, 4) : '',
+    firstAirDate: tmdbShow.first_air_date || '',
+    lastAirDate: tmdbShow.last_air_date || '',
+    rating: typeof tmdbShow.vote_average === 'number' && tmdbShow.vote_average > 0
+      ? Number(tmdbShow.vote_average.toFixed(1))
+      : null,
+    voteCount: typeof tmdbShow.vote_count === 'number' ? tmdbShow.vote_count : null,
+    seasons: typeof numSeasons === 'number' ? `${numSeasons} ${numSeasons === 1 ? 'Season' : 'Seasons'}` : '',
+    episodes: typeof numEpisodes === 'number' ? `${numEpisodes} ${numEpisodes === 1 ? 'Episode' : 'Episodes'}` : '',
+    episodeRuntime: Array.isArray(tmdbShow.episode_run_time) && tmdbShow.episode_run_time.length > 0
+      ? `${tmdbShow.episode_run_time[0]}m`
+      : '',
+    status: tmdbShow.status || '',
+    genre: genreNames.join(' • '),
+    language: tmdbShow.spoken_languages?.[0]?.english_name || tmdbShow.original_language || 'English',
+    createdBy: Array.isArray(tmdbShow.created_by) ? tmdbShow.created_by : [],
+    posterUrl: getTmdbImageUrl(tmdbShow.poster_path, 'w500'),
+    backdropUrl: getTmdbImageUrl(tmdbShow.backdrop_path, 'w1280'),
+    description: tmdbShow.overview || '',
+    trailerUrl: extractYouTubeTrailerUrl(tmdbShow.videos),
+    mediaType: 'tv',
+    poster_path: tmdbShow.poster_path || null,
+    backdrop_path: tmdbShow.backdrop_path || null,
+    first_air_date: tmdbShow.first_air_date || '',
+    vote_average: tmdbShow.vote_average ?? null,
+    seasonsList: Array.isArray(tmdbShow.seasons) ? tmdbShow.seasons : [],
+    credits: tmdbShow.credits || null,
+    similar: Array.isArray(tmdbShow.similar?.results)
+      ? tmdbShow.similar.results
+          .filter((item) => String(item.id) !== String(tmdbShow.id))
+          .map((item) => normalizeTmdbTVShow(item, genreMap))
+          .filter(Boolean)
+      : [],
+  };
+}
+
+let cachedTVGenreMap = null;
+let cachedTVGenresList = null;
+
+/**
+ * Fetch and cache TMDB TV genres list for the current session
+ * @param {RequestInit} [options]
+ * @returns {Promise<Array<{ id: number, name: string }>>}
+ */
+export async function fetchTVGenres(options) {
+  if (cachedTVGenresList) return cachedTVGenresList;
+  if (!isApiConfigured()) return [];
+  try {
+    const data = await tmdbApi.getTVGenres(options);
+    const list = Array.isArray(data.genres) ? data.genres : [];
+    const map = {};
+    for (const g of list) {
+      if (g?.id && g?.name) map[g.id] = g.name;
+    }
+    cachedTVGenresList = list;
+    cachedTVGenreMap = map;
+    return list;
+  } catch (err) {
+    if (err?.name === 'AbortError') throw err;
+    return [];
+  }
+}
+
+/**
+ * Fetch and cache TMDB TV genre ID-to-name map for the current session
+ * @param {RequestInit} [options]
+ * @returns {Promise<Record<number, string>>}
+ */
+export async function fetchTVGenreMap(options) {
+  if (cachedTVGenreMap) return cachedTVGenreMap;
+  await fetchTVGenres(options);
+  return cachedTVGenreMap || {};
+}
+
+/**
+ * Discover TV shows with TMDB pagination support
+ * @param {Record<string, any>} [params]
+ * @param {RequestInit} [options]
+ * @param {Record<number, string>} [genreMap]
+ * @returns {Promise<{ results: Array<Object>, page: number, totalPages: number, totalResults: number }>}
+ */
+export async function discoverTVPage(params = {}, options, genreMap = {}) {
+  if (!isApiConfigured()) {
+    const local = getAllTVShows();
+    return {
+      results: local,
+      page: 1,
+      totalPages: 1,
+      totalResults: local.length,
+    };
+  }
+  const data = await tmdbApi.discoverTV(params, options);
+  const results = (data.results || [])
+    .map((s) => normalizeTmdbTVShow(s, genreMap))
+    .filter(Boolean);
+  return {
+    results,
+    page: data.page || 1,
+    totalPages: data.total_pages || 1,
+    totalResults: data.total_results || results.length,
+  };
+}
+
+/**
+ * Async TMDB-ready TV Service Helpers (with safe local catalog fallback)
+ */
+export async function fetchTrendingTVShows(timeWindow = 'week', page = 1, options, genreMap = {}) {
+  if (!isApiConfigured()) return getTrendingTVShows();
+  const data = await tmdbApi.getTrendingTV(timeWindow, page, options);
+  return (data.results || []).map((s) => normalizeTmdbTVShow(s, genreMap)).filter(Boolean);
+}
+
+export async function fetchPopularTVShows(page = 1, options, genreMap = {}) {
+  if (!isApiConfigured()) return getBingeWorthyTVShows();
+  const data = await tmdbApi.getPopularTV(page, options);
+  return (data.results || []).map((s) => normalizeTmdbTVShow(s, genreMap)).filter(Boolean);
+}
+
+export async function fetchTopRatedTVShows(page = 1, options, genreMap = {}) {
+  if (!isApiConfigured()) return getTopRatedTVShows();
+  const data = await tmdbApi.getTopRatedTV(page, options);
+  return (data.results || []).map((s) => normalizeTmdbTVShow(s, genreMap)).filter(Boolean);
+}
+
+export async function fetchTVShowDetails(tvId, options) {
+  const localMatch = getTVShowById(tvId);
+  if (!isApiConfigured() || (localMatch && isNaN(Number(tvId)))) {
+    return localMatch;
+  }
+  const data = await tmdbApi.getTVDetails(tvId, options);
+  return normalizeTmdbTVShow(data);
+}
+
+export async function fetchTVShowCredits(tvId, options) {
+  if (!isApiConfigured() || isNaN(Number(tvId))) return { cast: [], crew: [] };
+  return tmdbApi.getTVCredits(tvId, options);
+}
+
+export async function fetchSimilarTVShows(tvId, page = 1, options) {
+  if (!isApiConfigured() || isNaN(Number(tvId))) {
+    return getRelatedTVShows(tvId, 6);
+  }
+  const data = await tmdbApi.getSimilarTV(tvId, page, options);
+  return (data.results || []).map((s) => normalizeTmdbTVShow(s)).filter(Boolean);
+}
+
+const SEASON_CACHE = new Map();
+
+export async function fetchTVSeasonDetails(tvId, seasonNumber, options) {
+  if (!isApiConfigured() || isNaN(Number(tvId))) return null;
+  const cacheKey = `${tvId}:${seasonNumber}`;
+  if (SEASON_CACHE.has(cacheKey)) {
+    return SEASON_CACHE.get(cacheKey);
+  }
+  const data = await tmdbApi.getTVSeasonDetails(tvId, seasonNumber, options);
+  if (data) {
+    SEASON_CACHE.set(cacheKey, data);
+  }
+  return data;
+}
+
+export async function fetchTVEpisodeDetails(tvId, seasonNumber, episodeNumber, options) {
+  if (!isApiConfigured() || isNaN(Number(tvId))) return null;
+  return tmdbApi.getTVEpisodeDetails(tvId, seasonNumber, episodeNumber, options);
 }

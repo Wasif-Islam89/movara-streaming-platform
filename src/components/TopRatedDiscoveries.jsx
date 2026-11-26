@@ -75,6 +75,9 @@ const DEFAULT_TOP_RATED_MOVIES = [
  */
 export default function TopRatedDiscoveries({
   movies = DEFAULT_TOP_RATED_MOVIES,
+  isLoading = false,
+  error = null,
+  onRetry = null,
   className = '',
 }) {
   return (
@@ -82,6 +85,9 @@ export default function TopRatedDiscoveries({
       title="Top Rated Discoveries"
       badge="Top Rated"
       movies={movies}
+      isLoading={isLoading}
+      error={error}
+      onRetry={onRetry}
       className={className}
     />
   );

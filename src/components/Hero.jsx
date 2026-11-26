@@ -69,6 +69,11 @@ export default function Hero({
   const [currentIndex, setCurrentIndex] = useState(0);
   const totalSlides = movies.length;
 
+  // Reset slide index if the movies array shrinks or changes
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [totalSlides]);
+
   // Seamless continuous automated transition
   useEffect(() => {
     if (totalSlides <= 1) return;

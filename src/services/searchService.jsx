@@ -1,5 +1,6 @@
-import { getAllMovies } from './movieService';
-import { getAllTVShows } from './tvService';
+import { getAllMovies, normalizeTmdbMovie } from './movieService';
+import { getAllTVShows, normalizeTmdbTVShow } from './tvService';
+import { tmdbApi, isApiConfigured } from './api';
 
 /**
  * Curated suggestions for discovery & instant search
@@ -93,4 +94,73 @@ export function searchCatalog(query, { filter = 'all', limit = null } = {}) {
 
   const results = scored.map((s) => s.item);
   return limit ? results.slice(0, limit) : results;
+}
+
+const SEARCH_CACHE = new Map();
+
+/**
+ * Async TMDB-ready Search Helpers (with AbortSignal, session cache & local catalog fallback)
+ * @param {string} query
+ * @param {Object} [options]
+ * @param {'all' | 'movies' | 'tv'} [options.filter='all']
+ * @param {number} [options.page=1]
+ * @param {AbortSignal} [options.signal]
+ * @returns {Promise<{ results: Array<Object>, page: number, totalPages: number, totalResults: number }>}
+ */
+export async function searchTMDB(query, { filter = 'all', page = 1, signal } = {}) {
+  const cleanQuery = typeof query === 'string' ? query.trim() : '';
+  if (!cleanQuery) {
+    return { results: [], page: 1, totalPages: 1, totalResults: 0 };
+  }
+
+  if (!isApiConfigured()) {
+    const localResults = searchCatalog(cleanQuery, { filter });
+    return { results: localResults, page: 1, totalPages: 1, totalResults: localResults.length };
+  }
+
+  const cacheKey = `${filter}:${page}:${cleanQuery.toLowerCase()}`;
+  if (SEARCH_CACHE.has(cacheKey)) {
+    return SEARCH_CACHE.get(cacheKey);
+  }
+
+  const fetchOptions = signal ? { signal } : undefined;
+  let data;
+
+  if (filter === 'movies') {
+    data = await tmdbApi.searchMovies(cleanQuery, page, fetchOptions);
+  } else if (filter === 'tv') {
+    data = await tmdbApi.searchTV(cleanQuery, page, fetchOptions);
+  } else {
+    data = await tmdbApi.searchMulti(cleanQuery, page, fetchOptions);
+  }
+
+  const normalized = (data.results || [])
+    .filter((item) => {
+      if (filter === 'movies') return true;
+      if (filter === 'tv') return true;
+      return item.media_type === 'movie' || item.media_type === 'tv';
+    })
+    .map((item) => {
+      const type = filter === 'movies' ? 'movie' : filter === 'tv' ? 'tv' : item.media_type;
+      return type === 'tv' ? normalizeTmdbTVShow(item) : normalizeTmdbMovie(item);
+    })
+    .filter(Boolean);
+
+  const payload = {
+    results: normalized,
+    page: data.page || 1,
+    totalPages: data.total_pages || 1,
+    totalResults: data.total_results || normalized.length,
+  };
+
+  SEARCH_CACHE.set(cacheKey, payload);
+  return payload;
+}
+
+export async function searchMoviesTMDB(query, page = 1, signal) {
+  return searchTMDB(query, { filter: 'movies', page, signal });
+}
+
+export async function searchTVTMDB(query, page = 1, signal) {
+  return searchTMDB(query, { filter: 'tv', page, signal });
 }

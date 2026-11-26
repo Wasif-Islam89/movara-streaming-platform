@@ -1,10 +1,12 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  DEFAULT_PROFILES, 
-  getStoredProfiles, 
-  setStoredProfiles, 
-  getStoredActiveProfileId, 
-  setStoredActiveProfileId 
+import {
+  DEFAULT_PROFILES,
+  getStoredProfiles,
+  setStoredProfiles,
+  getStoredActiveProfileId,
+  setStoredActiveProfileId,
+  migrateLegacyDataToProfile,
+  removeProfileScopedData,
 } from '../utils/localStorage';
 
 export { DEFAULT_PROFILES };
@@ -21,9 +23,21 @@ export const AVATAR_PRESETS = [
 const ProfileContext = createContext(null);
 
 export function ProfileProvider({ children }) {
-  // Initialize profiles and active ID from centralized localStorage
-  const [profiles, setProfiles] = useState(() => getStoredProfiles());
-  const [activeProfileId, setActiveProfileId] = useState(() => getStoredActiveProfileId());
+  const [profiles, setProfiles] = useState(() => {
+    const stored = getStoredProfiles();
+    const list = Array.isArray(stored) && stored.length > 0 ? stored : DEFAULT_PROFILES;
+    migrateLegacyDataToProfile(list[0].id);
+    return list;
+  });
+
+  const [activeProfileId, setActiveProfileId] = useState(() => {
+    const storedId = getStoredActiveProfileId();
+    const storedProfiles = getStoredProfiles();
+    if (storedId && storedProfiles.some((p) => p.id === storedId)) {
+      return storedId;
+    }
+    return null;
+  });
 
   // Modal state for "Who's watching?" / Manage Profiles
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
@@ -38,47 +52,84 @@ export function ProfileProvider({ children }) {
     setStoredActiveProfileId(activeProfileId);
   }, [activeProfileId]);
 
-  // Active profile object
-  const activeProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0] || DEFAULT_PROFILES[0];
+  const matchedProfile = profiles.find((p) => p.id === activeProfileId) || null;
+  const hasSelectedProfile = Boolean(matchedProfile);
+  const activeProfile = matchedProfile || profiles[0] || DEFAULT_PROFILES[0];
+  const effectiveProfileId = activeProfile?.id || DEFAULT_PROFILES[0].id;
 
   function switchProfile(id) {
     if (profiles.some((p) => p.id === id)) {
       setActiveProfileId(id);
       setIsManageModalOpen(false);
       setIsEditingMode(false);
+      return true;
     }
+    return false;
   }
 
   function addProfile({ name, avatar = 'av-blue', isKids = false }) {
-    if (!name?.trim()) return null;
+    const trimmed = typeof name === 'string' ? name.trim() : '';
+    if (!trimmed) {
+      return { ok: false, error: 'Profile name cannot be empty.' };
+    }
+    const isDuplicate = profiles.some(
+      (p) => p.name.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (isDuplicate) {
+      return { ok: false, error: 'A profile with this name already exists.' };
+    }
+
     const newProfile = {
       id: `prof-${Date.now()}`,
-      name: name.trim(),
+      name: trimmed,
       avatar,
       isKids: Boolean(isKids),
       language: 'English',
     };
     setProfiles((prev) => [...prev, newProfile]);
-    return newProfile;
+    return { ok: true, profile: newProfile };
   }
 
   function updateProfile(id, updates) {
+    const trimmed = typeof updates?.name === 'string' ? updates.name.trim() : '';
+    if (updates?.name !== undefined) {
+      if (!trimmed) {
+        return { ok: false, error: 'Profile name cannot be empty.' };
+      }
+      const isDuplicate = profiles.some(
+        (p) => p.id !== id && p.name.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+      if (isDuplicate) {
+        return { ok: false, error: 'A profile with this name already exists.' };
+      }
+    }
+
     setProfiles((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
+      prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              ...updates,
+              ...(updates?.name !== undefined ? { name: trimmed } : {}),
+            }
+          : p
+      )
     );
+    return { ok: true };
   }
 
   function deleteProfile(id) {
     if (profiles.length <= 1) {
-      alert('You must have at least one profile.');
       return false;
     }
-    setProfiles((prev) => prev.filter((p) => p.id !== id));
+    const remaining = profiles.filter((p) => p.id !== id);
+    if (remaining.length === profiles.length) return false;
+
+    removeProfileScopedData(id);
+    setProfiles(remaining);
+
     if (activeProfileId === id) {
-      const remaining = profiles.filter((p) => p.id !== id);
-      if (remaining.length > 0) {
-        setActiveProfileId(remaining[0].id);
-      }
+      setActiveProfileId(remaining[0].id);
     }
     return true;
   }
@@ -98,7 +149,8 @@ export function ProfileProvider({ children }) {
       value={{
         profiles,
         activeProfile,
-        activeProfileId,
+        activeProfileId: effectiveProfileId,
+        hasSelectedProfile,
         switchProfile,
         addProfile,
         updateProfile,

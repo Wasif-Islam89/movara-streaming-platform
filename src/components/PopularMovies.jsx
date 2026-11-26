@@ -75,6 +75,9 @@ const DEFAULT_POPULAR_MOVIES = [
  */
 export default function PopularMovies({
   movies = DEFAULT_POPULAR_MOVIES,
+  isLoading = false,
+  error = null,
+  onRetry = null,
   className = '',
 }) {
   return (
@@ -82,6 +85,9 @@ export default function PopularMovies({
       title="Popular Movies"
       badge="Popular"
       movies={movies}
+      isLoading={isLoading}
+      error={error}
+      onRetry={onRetry}
       className={className}
     />
   );

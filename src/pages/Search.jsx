@@ -1,32 +1,70 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
-import { 
-  Search as SearchIcon, 
-  X, 
-  Film, 
-  Tv, 
-  Sparkles, 
-  Clapperboard, 
-  SlidersHorizontal,
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  Search as SearchIcon,
+  X,
+  Sparkles,
+  Clapperboard,
   Flame,
-  ArrowRight
+  AlertCircle,
+  RotateCcw,
+  Loader2,
 } from 'lucide-react';
 import MovieCard from '../components/MovieCard';
-import { searchCatalog, POPULAR_SEARCH_TERMS } from '../services/searchService';
-import { getAllMovies } from '../services/movieService';
-import { getAllTVShows } from '../services/tvService';
+import { isApiConfigured } from '../services/api';
+import {
+  searchCatalog,
+  searchTMDB,
+  searchMoviesTMDB,
+  searchTVTMDB,
+  POPULAR_SEARCH_TERMS,
+} from '../services/searchService';
+import { getAllMovies, fetchTrendingMovies } from '../services/movieService';
+import { getAllTVShows, fetchTrendingTVShows } from '../services/tvService';
+
+const INITIAL_SEARCH_STATE = {
+  results: [],
+  page: 1,
+  totalPages: 1,
+  totalResults: 0,
+  isLoading: false,
+  isLoadingMore: false,
+  error: null,
+  loadMoreError: null,
+};
 
 export default function Search() {
+  const apiReady = isApiConfigured();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryParam = searchParams.get('q') || '';
-  
-  const [searchTerm, setSearchTerm] = useState(queryParam);
-  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'movies' | 'tv'
 
-  // Sync internal state when URL query changes
+  const [searchTerm, setSearchTerm] = useState(queryParam);
+  const [debouncedQuery, setDebouncedQuery] = useState(queryParam);
+  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'movies' | 'tv'
+  const [tmdbState, setTmdbState] = useState(INITIAL_SEARCH_STATE);
+  const abortRef = useRef(null);
+
+  // Sync internal state immediately when URL query changes
   useEffect(() => {
     setSearchTerm(queryParam);
+    setDebouncedQuery(queryParam);
   }, [queryParam]);
+
+  // Debounce typed search input (350ms) to prevent firing on every keystroke
+  useEffect(() => {
+    const trimmed = searchTerm.trim();
+    if (!trimmed) {
+      setDebouncedQuery('');
+      return;
+    }
+    if (trimmed === debouncedQuery.trim()) return;
+
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchTerm);
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, debouncedQuery]);
 
   // Dynamic SEO title
   useEffect(() => {
@@ -37,55 +75,237 @@ export default function Search() {
     }
   }, [queryParam]);
 
-  // Compute search results based on active query and filter
-  const results = useMemo(() => {
-    const trimmed = searchTerm.trim();
+  // Execute live TMDB search with AbortController cleanup
+  const runTmdbSearch = useCallback(
+    async (query, filter, page = 1, append = false) => {
+      const trimmed = (query || '').trim();
+      if (!apiReady || !trimmed) {
+        setTmdbState(INITIAL_SEARCH_STATE);
+        return;
+      }
+
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const { signal } = controller;
+
+      if (append) {
+        setTmdbState((prev) => ({
+          ...prev,
+          isLoadingMore: true,
+          loadMoreError: null,
+        }));
+      } else {
+        setTmdbState({
+          ...INITIAL_SEARCH_STATE,
+          isLoading: true,
+        });
+      }
+
+      try {
+        let data;
+        if (filter === 'movies') {
+          data = await searchMoviesTMDB(trimmed, page, signal);
+        } else if (filter === 'tv') {
+          data = await searchTVTMDB(trimmed, page, signal);
+        } else {
+          data = await searchTMDB(trimmed, { filter: 'all', page, signal });
+        }
+
+        if (signal.aborted) return;
+
+        setTmdbState((prev) => {
+          if (!append) {
+            return {
+              results: data.results,
+              page: data.page,
+              totalPages: data.totalPages,
+              totalResults: data.totalResults,
+              isLoading: false,
+              isLoadingMore: false,
+              error: null,
+              loadMoreError: null,
+            };
+          }
+
+          const existingKeys = new Set(
+            prev.results.map((item) => `${item.mediaType}-${item.id}`)
+          );
+          const uniqueNext = data.results.filter(
+            (item) => !existingKeys.has(`${item.mediaType}-${item.id}`)
+          );
+          return {
+            results: [...prev.results, ...uniqueNext],
+            page: data.page,
+            totalPages: data.totalPages,
+            totalResults: data.totalResults,
+            isLoading: false,
+            isLoadingMore: false,
+            error: null,
+            loadMoreError: null,
+          };
+        });
+      } catch (err) {
+        if (err?.name === 'AbortError' || signal.aborted) return;
+        setTmdbState((prev) =>
+          append
+            ? {
+                ...prev,
+                isLoadingMore: false,
+                loadMoreError: 'Could not load more results. Please try again.',
+              }
+            : {
+                ...prev,
+                results: [],
+                isLoading: false,
+                isLoadingMore: false,
+                error: 'Unable to fetch search results right now. Please try again.',
+              }
+        );
+      }
+    },
+    [apiReady]
+  );
+
+  useEffect(() => {
+    if (!apiReady) return;
+    const trimmed = debouncedQuery.trim();
+    if (!trimmed) {
+      if (abortRef.current) abortRef.current.abort();
+      setTmdbState(INITIAL_SEARCH_STATE);
+      return;
+    }
+
+    runTmdbSearch(trimmed, activeFilter, 1, false);
+
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+    };
+  }, [apiReady, debouncedQuery, activeFilter, runTmdbSearch]);
+
+  // Offline / unconfigured local catalog search fallback
+  const localResults = useMemo(() => {
+    if (apiReady) return [];
+    const trimmed = debouncedQuery.trim();
     if (!trimmed) return [];
     return searchCatalog(trimmed, { filter: activeFilter });
-  }, [searchTerm, activeFilter]);
+  }, [apiReady, debouncedQuery, activeFilter]);
 
-  // Count per category for badge counters
+  const results = apiReady ? tmdbState.results : localResults;
+
+  // Count per category for filter tab badges
   const categoryCounts = useMemo(() => {
-    const trimmed = searchTerm.trim();
+    const trimmed = debouncedQuery.trim();
     if (!trimmed) return { all: 0, movies: 0, tv: 0 };
-    const allResults = searchCatalog(trimmed, { filter: 'all' });
-    const moviesCount = allResults.filter((item) => item.mediaType === 'movie').length;
-    const tvCount = allResults.filter((item) => item.mediaType === 'tv').length;
-    return {
-      all: allResults.length,
-      movies: moviesCount,
-      tv: tvCount,
-    };
-  }, [searchTerm]);
 
-  // Default featured catalog when no query is typed
-  const featuredExploreList = useMemo(() => {
+    if (!apiReady) {
+      const allResults = searchCatalog(trimmed, { filter: 'all' });
+      return {
+        all: allResults.length,
+        movies: allResults.filter((item) => item.mediaType === 'movie').length,
+        tv: allResults.filter((item) => item.mediaType === 'tv').length,
+      };
+    }
+
+    if (activeFilter === 'all') {
+      return {
+        all: tmdbState.results.length,
+        movies: tmdbState.results.filter((item) => item.mediaType === 'movie').length,
+        tv: tmdbState.results.filter((item) => item.mediaType === 'tv').length,
+      };
+    }
+
+    return {
+      all: tmdbState.results.length,
+      movies: activeFilter === 'movies' ? tmdbState.results.length : 0,
+      tv: activeFilter === 'tv' ? tmdbState.results.length : 0,
+    };
+  }, [apiReady, debouncedQuery, activeFilter, tmdbState.results]);
+
+  // Default featured catalog when no query is typed (live TMDB trending with local fallback)
+  const localFeaturedExploreList = useMemo(() => {
     const movies = getAllMovies().slice(0, 6);
     const tvs = getAllTVShows().slice(0, 4);
     return [...movies, ...tvs];
   }, []);
+
+  const [liveFeaturedExploreList, setLiveFeaturedExploreList] = useState([]);
+  const [isFeaturedLoading, setIsFeaturedLoading] = useState(() => apiReady && !queryParam.trim());
+
+  useEffect(() => {
+    if (!apiReady || debouncedQuery.trim()) return;
+
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    async function loadFeaturedShowcase() {
+      setIsFeaturedLoading(true);
+      try {
+        const [trendingMovies, trendingTV] = await Promise.all([
+          fetchTrendingMovies('week', 1, { signal }),
+          fetchTrendingTVShows('week', 1, { signal }),
+        ]);
+        if (signal.aborted) return;
+        const combined = [
+          ...trendingMovies.slice(0, 6),
+          ...trendingTV.slice(0, 4),
+        ];
+        setLiveFeaturedExploreList(combined);
+        setIsFeaturedLoading(false);
+      } catch (err) {
+        if (err?.name === 'AbortError' || signal.aborted) return;
+        setLiveFeaturedExploreList([]);
+        setIsFeaturedLoading(false);
+      }
+    }
+
+    loadFeaturedShowcase();
+
+    return () => {
+      controller.abort();
+    };
+  }, [apiReady, debouncedQuery]);
+
+  const featuredExploreList =
+    apiReady && liveFeaturedExploreList.length > 0
+      ? liveFeaturedExploreList
+      : localFeaturedExploreList;
 
   function handleFormSubmit(e) {
     e.preventDefault();
     const trimmed = searchTerm.trim();
     if (trimmed) {
       setSearchParams({ q: trimmed });
+      setDebouncedQuery(trimmed);
     } else {
       setSearchParams({});
+      setDebouncedQuery('');
     }
   }
 
   function handleTagClick(term) {
     setSearchTerm(term);
+    setDebouncedQuery(term);
     setSearchParams({ q: term });
   }
 
   function handleClear() {
     setSearchTerm('');
+    setDebouncedQuery('');
     setSearchParams({});
   }
 
-  const hasQuery = Boolean(searchTerm.trim());
+  const hasQuery = Boolean(debouncedQuery.trim());
+  const hasMorePages = apiReady && tmdbState.page < tmdbState.totalPages;
+
+  function handleLoadMore() {
+    if (!apiReady || tmdbState.isLoadingMore || tmdbState.isLoading || !hasMorePages) return;
+    runTmdbSearch(debouncedQuery, activeFilter, tmdbState.page + 1, true);
+  }
 
   return (
     <div className="min-h-screen bg-[#121212] text-[#F3EEE4] pb-20">
@@ -177,10 +397,14 @@ export default function Search() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#1D1C1A]">
               <div className="space-y-1">
                 <h2 className="text-xl sm:text-2xl font-bold text-[#F3EEE4] flex items-center gap-2">
-                  <span>Results for &ldquo;{searchTerm}&rdquo;</span>
+                  <span>Results for &ldquo;{debouncedQuery.trim()}&rdquo;</span>
                 </h2>
                 <p className="text-xs sm:text-sm text-[#AAA49A]">
-                  Showing {results.length} {results.length === 1 ? 'match' : 'matches'} in MOVORA catalog
+                  Showing {results.length} {results.length === 1 ? 'match' : 'matches'}
+                  {apiReady && tmdbState.totalResults > results.length
+                    ? ` of ${tmdbState.totalResults.toLocaleString()}`
+                    : ''}{' '}
+                  in MOVORA catalog
                 </p>
               </div>
 
@@ -206,7 +430,7 @@ export default function Search() {
                       : 'text-[#AAA49A] hover:text-[#F3EEE4]'
                   }`}
                 >
-                  Movies ({categoryCounts.movies})
+                  Movies{activeFilter === 'all' || activeFilter === 'movies' ? ` (${categoryCounts.movies})` : ''}
                 </button>
                 <button
                   type="button"
@@ -217,22 +441,84 @@ export default function Search() {
                       : 'text-[#AAA49A] hover:text-[#F3EEE4]'
                   }`}
                 >
-                  TV Shows ({categoryCounts.tv})
+                  TV Shows{activeFilter === 'all' || activeFilter === 'tv' ? ` (${categoryCounts.tv})` : ''}
                 </button>
               </div>
             </div>
 
-            {/* Results Grid */}
-            {results.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-4 sm:gap-6">
-                {results.map((item) => (
-                  <MovieCard
-                    key={`${item.mediaType}-${item.id}`}
-                    movie={item}
-                    mediaType={item.mediaType}
-                  />
+            {/* Loading, Error, Results Grid, or Empty State */}
+            {apiReady && tmdbState.isLoading ? (
+              <div
+                aria-label="Loading search results"
+                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-4 sm:gap-6"
+              >
+                {Array.from({ length: 10 }).map((_, idx) => (
+                  <div
+                    key={`search-skeleton-${idx}`}
+                    className="aspect-[2/3] w-full rounded-xl bg-[#1D1C1A] border border-[#2A2926] animate-pulse relative overflow-hidden"
+                  >
+                    <div className="absolute inset-x-3 bottom-3 space-y-2">
+                      <div className="h-3.5 w-3/4 rounded bg-[#2A2926]" />
+                      <div className="flex items-center justify-between">
+                        <div className="h-3 w-10 rounded bg-[#2A2926]" />
+                        <div className="h-3 w-10 rounded bg-[#2A2926]" />
+                      </div>
+                    </div>
+                  </div>
                 ))}
               </div>
+            ) : apiReady && tmdbState.error ? (
+              <div className="py-16 text-center rounded-2xl bg-[#1D1C1A]/60 border border-[#2A2926] space-y-3 max-w-lg mx-auto px-4">
+                <AlertCircle className="w-8 h-8 text-[#E58B43] mx-auto" />
+                <p className="text-sm text-[#AAA49A]">{tmdbState.error}</p>
+                <button
+                  type="button"
+                  onClick={() => runTmdbSearch(debouncedQuery, activeFilter, 1, false)}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-semibold text-[#121212] bg-[#F2B84B] hover:bg-[#E58B43] transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Try Again</span>
+                </button>
+              </div>
+            ) : results.length > 0 ? (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-4 sm:gap-6">
+                  {results.map((item) => (
+                    <MovieCard
+                      key={`${item.mediaType}-${item.id}`}
+                      movie={item}
+                      mediaType={item.mediaType}
+                    />
+                  ))}
+                </div>
+
+                {(hasMorePages || tmdbState.loadMoreError) && (
+                  <div className="pt-4 flex flex-col items-center gap-3">
+                    {tmdbState.loadMoreError && (
+                      <p className="text-xs text-[#E58B43]">{tmdbState.loadMoreError}</p>
+                    )}
+                    {hasMorePages && (
+                      <button
+                        type="button"
+                        onClick={handleLoadMore}
+                        disabled={tmdbState.isLoadingMore}
+                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-[#1D1C1A] border border-[#2A2926] text-[#F3EEE4] hover:border-[#F2B84B]/60 hover:text-[#F2B84B] disabled:opacity-60 disabled:cursor-not-allowed transition-all cursor-pointer"
+                      >
+                        {tmdbState.isLoadingMore ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin text-[#F2B84B]" />
+                            <span>Loading More...</span>
+                          </>
+                        ) : (
+                          <span>
+                            {tmdbState.loadMoreError ? 'Retry Load More' : 'Load More Results'}
+                          </span>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
             ) : (
               /* No Results State */
               <div className="py-16 text-center space-y-4 max-w-md mx-auto">
@@ -240,7 +526,7 @@ export default function Search() {
                   <SearchIcon className="w-8 h-8 text-[#AAA49A]/60" />
                 </div>
                 <h3 className="text-xl font-bold text-[#F3EEE4]">
-                  No titles match &ldquo;{searchTerm}&rdquo;
+                  No titles match &ldquo;{debouncedQuery.trim()}&rdquo;
                 </h3>
                 <p className="text-sm text-[#AAA49A]">
                   We couldn&apos;t find anything matching your query. Try searching with a different term, checking for typos, or browse popular movies.
@@ -274,15 +560,29 @@ export default function Search() {
             </div>
 
             {/* Showcase Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
-              {featuredExploreList.map((item) => (
-                <MovieCard
-                  key={`${item.mediaType || 'movie'}-${item.id}`}
-                  movie={item}
-                  mediaType={item.mediaType || 'movie'}
-                />
-              ))}
-            </div>
+            {apiReady && isFeaturedLoading && liveFeaturedExploreList.length === 0 ? (
+              <div
+                aria-label="Loading trending recommendations"
+                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6"
+              >
+                {Array.from({ length: 10 }).map((_, idx) => (
+                  <div
+                    key={`explore-skeleton-${idx}`}
+                    className="aspect-[2/3] w-full rounded-xl bg-[#1D1C1A] border border-[#2A2926] animate-pulse"
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
+                {featuredExploreList.map((item) => (
+                  <MovieCard
+                    key={`${item.mediaType || 'movie'}-${item.id}`}
+                    movie={item}
+                    mediaType={item.mediaType || 'movie'}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 

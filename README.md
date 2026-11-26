@@ -54,3 +54,5 @@ MOVORA is an independent portfolio project inspired by streaming platforms. It i
 Movie and TV show metadata and images may be provided by TMDB.
 
 This product uses the TMDB API but is not endorsed or certified by TMDB.
+
+

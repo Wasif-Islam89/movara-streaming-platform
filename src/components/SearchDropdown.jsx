@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Star, Film, Tv, ArrowRight, Search as SearchIcon, ImageOff } from 'lucide-react';
-import { searchCatalog } from '../services/searchService';
+import { Star, ArrowRight, Search as SearchIcon, ImageOff, Loader2 } from 'lucide-react';
+import { isApiConfigured } from '../services/api';
+import { searchCatalog, searchTMDB } from '../services/searchService';
 
 /**
  * Dropdown preview component for real-time search suggestions in Navbar.
@@ -12,24 +13,58 @@ import { searchCatalog } from '../services/searchService';
  * @param {() => void} props.onClose - Callback to close dropdown & search overlay
  */
 export default function SearchDropdown({ query, isOpen, onClose }) {
+  const apiReady = isApiConfigured();
   const [results, setResults] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const containerRef = useRef(null);
   const navigate = useNavigate();
 
-  // Update results whenever query changes
+  // Update results whenever query changes (live TMDB with 300ms debounce + local fallback)
   useEffect(() => {
     const trimmed = (query || '').trim();
     if (!trimmed) {
       setResults([]);
+      setIsLoading(false);
       setSelectedIndex(-1);
       return;
     }
 
-    const matches = searchCatalog(trimmed, { limit: 5 });
-    setResults(matches);
-    setSelectedIndex(-1);
-  }, [query]);
+    if (!apiReady) {
+      const matches = searchCatalog(trimmed, { limit: 5 });
+      setResults(matches);
+      setIsLoading(false);
+      setSelectedIndex(-1);
+      return;
+    }
+
+    const controller = new AbortController();
+    setIsLoading(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const data = await searchTMDB(trimmed, {
+          filter: 'all',
+          page: 1,
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        setResults((data.results || []).slice(0, 5));
+        setSelectedIndex(-1);
+        setIsLoading(false);
+      } catch (err) {
+        if (err?.name === 'AbortError' || controller.signal.aborted) return;
+        setResults(searchCatalog(trimmed, { limit: 5 }));
+        setSelectedIndex(-1);
+        setIsLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, apiReady]);
 
   // Handle keyboard navigation (Arrow Up, Down, Enter, Escape)
   useEffect(() => {
@@ -85,7 +120,12 @@ export default function SearchDropdown({ query, isOpen, onClose }) {
       </div>
 
       {/* Results List */}
-      {results.length > 0 ? (
+      {isLoading ? (
+        <div className="py-8 px-4 flex items-center justify-center gap-2 text-xs text-[#AAA49A]">
+          <Loader2 className="w-4 h-4 animate-spin text-[#F2B84B]" />
+          <span>Searching MOVORA...</span>
+        </div>
+      ) : results.length > 0 ? (
         <div className="divide-y divide-[#2A2926]/50 max-h-[60vh] overflow-y-auto">
           {results.map((item, index) => {
             const isSelected = index === selectedIndex;

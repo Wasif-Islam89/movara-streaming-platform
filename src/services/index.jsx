@@ -7,3 +7,4 @@ export * from './movieService';
 export * from './tvService';
 export * from './searchService';
 export * from './api';
+export * from './playbackSourceService';

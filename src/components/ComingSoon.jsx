@@ -68,6 +68,9 @@ const DEFAULT_COMING_SOON_MOVIES = [
  */
 export default function ComingSoon({
   movies = DEFAULT_COMING_SOON_MOVIES,
+  isLoading = false,
+  error = null,
+  onRetry = null,
   className = '',
 }) {
   return (
@@ -75,6 +78,9 @@ export default function ComingSoon({
       title="Coming Soon"
       badge="Upcoming"
       movies={movies}
+      isLoading={isLoading}
+      error={error}
+      onRetry={onRetry}
       className={className}
     />
   );

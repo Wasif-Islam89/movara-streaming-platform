@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Film } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Film, AlertCircle, RotateCcw } from 'lucide-react';
 import MovieCard from './MovieCard';
 
 /**
@@ -25,6 +25,9 @@ export default function MovieRow({
   subtitle,
   badge,
   movies = [],
+  isLoading = false,
+  error = null,
+  onRetry = null,
   className = '',
 }) {
   const rowRef = useRef(null);
@@ -161,7 +164,47 @@ export default function MovieRow({
       </div>
 
       {/* Horizontal Scrollable Container */}
-      {hasMovies ? (
+      {isLoading ? (
+        <div
+          aria-label={`Loading ${title}`}
+          className="flex items-center gap-3.5 sm:gap-4 md:gap-5 overflow-hidden pt-2 pb-4"
+        >
+          {Array.from({ length: 5 }).map((_, idx) => (
+            <div
+              key={`skeleton-${idx}`}
+              className="w-[160px] sm:w-[calc((100%-2*1rem)/3)] md:w-[calc((100%-3*1.25rem)/4)] lg:w-[calc((100%-4*1.25rem)/5)] flex-shrink-0"
+            >
+              <div className="aspect-[2/3] w-full rounded-xl bg-[#1D1C1A] border border-[#2A2926] animate-pulse relative overflow-hidden">
+                <div className="absolute inset-x-3 bottom-3 space-y-2">
+                  <div className="h-3.5 w-3/4 rounded bg-[#2A2926]" />
+                  <div className="flex items-center justify-between">
+                    <div className="h-3 w-10 rounded bg-[#2A2926]" />
+                    <div className="h-3 w-10 rounded bg-[#2A2926]" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        /* Error State */
+        <div className="rounded-xl border border-[#2A2926] bg-[#1D1C1A]/60 p-8 text-center space-y-3">
+          <AlertCircle className="w-8 h-8 text-[#E58B43] mx-auto" />
+          <p className="text-sm text-[#AAA49A]">
+            {error}
+          </p>
+          {typeof onRetry === 'function' && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-[#F2B84B] text-[#121212] hover:bg-[#E58B43] transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Try Again</span>
+            </button>
+          )}
+        </div>
+      ) : hasMovies ? (
         <div
           ref={rowRef}
           tabIndex={0}

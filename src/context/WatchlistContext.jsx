@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { 
-  getStoredWatchlist as fetchStoredWatchlist, 
+import {
+  getStoredWatchlist as fetchStoredWatchlist,
   setStoredWatchlist as saveStoredWatchlist,
-  addStoredNotification
+  addStoredNotification,
 } from '../utils/localStorage';
+import { useProfile } from './ProfileContext';
 
 const EVENT_NAME = 'movora:watchlist-update';
 
@@ -15,24 +16,27 @@ export function getWatchlistKey(id, mediaType = 'movie') {
   return `${cleanType}-${String(id)}`;
 }
 
-function getStoredWatchlist() {
-  const items = fetchStoredWatchlist();
+function getStoredWatchlist(profileId) {
+  const items = fetchStoredWatchlist(profileId);
   return items.filter((item) => item && item.id !== undefined && item.id !== null);
 }
 
-function persistWatchlist(items) {
-  saveStoredWatchlist(items);
+function persistWatchlist(items, profileId) {
+  saveStoredWatchlist(items, profileId);
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: items }));
+    window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { items, profileId } }));
   }
 }
 
 export function WatchlistProvider({ children }) {
-  const [watchlist, setWatchlist] = useState(getStoredWatchlist);
+  const { activeProfileId } = useProfile();
+  const [watchlist, setWatchlist] = useState(() => getStoredWatchlist(activeProfileId));
 
   useEffect(() => {
+    setWatchlist(getStoredWatchlist(activeProfileId));
+
     function handleUpdate() {
-      setWatchlist(getStoredWatchlist());
+      setWatchlist(getStoredWatchlist(activeProfileId));
     }
 
     window.addEventListener(EVENT_NAME, handleUpdate);
@@ -42,7 +46,7 @@ export function WatchlistProvider({ children }) {
       window.removeEventListener(EVENT_NAME, handleUpdate);
       window.removeEventListener('storage', handleUpdate);
     };
-  }, []);
+  }, [activeProfileId]);
 
   const isInWatchlist = useCallback(
     (id, mediaType = 'movie') => {
@@ -73,7 +77,7 @@ export function WatchlistProvider({ children }) {
       };
 
       const nextList = [sanitizedItem, ...prev];
-      persistWatchlist(nextList);
+      persistWatchlist(nextList, activeProfileId);
 
       // Trigger automatic streaming notification
       addStoredNotification({
@@ -86,7 +90,7 @@ export function WatchlistProvider({ children }) {
 
       return nextList;
     });
-  }, []);
+  }, [activeProfileId]);
 
   const removeFromWatchlist = useCallback((id, mediaType = 'movie') => {
     if (id === undefined || id === null) return;
@@ -96,10 +100,10 @@ export function WatchlistProvider({ children }) {
       const nextList = prev.filter(
         (item) => getWatchlistKey(item.id, item.mediaType) !== targetKey
       );
-      persistWatchlist(nextList);
+      persistWatchlist(nextList, activeProfileId);
       return nextList;
     });
-  }, []);
+  }, [activeProfileId]);
 
   const toggleWatchlist = useCallback(
     (item) => {
@@ -117,8 +121,8 @@ export function WatchlistProvider({ children }) {
 
   const clearWatchlist = useCallback(() => {
     setWatchlist([]);
-    persistWatchlist([]);
-  }, []);
+    persistWatchlist([], activeProfileId);
+  }, [activeProfileId]);
 
   const value = {
     watchlist,
